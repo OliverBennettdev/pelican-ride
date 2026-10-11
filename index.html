@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>鹈鹕骑行 · Pelican Ride</title>
+  <meta name="description" content="一只决定去码头兜风的鹈鹕。拖动视角，跟着它骑过黎明的栈桥。" />
+  <meta property="og:title" content="鹈鹕骑行 · Pelican Ride" />
+  <meta property="og:description" content="一只决定去码头兜风的鹈鹕。" />
+  <meta property="og:image" content="https://cdn.jsdelivr.net/gh/OliverBennettdev/pelican-ride@main/assets/cinematic.jpg" />
+  <link rel="icon" href="assets/icon.jpg" type="image/jpeg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #16343a;
+      --paper: #f4efe4;
+      --foam: rgba(244, 239, 228, 0.88);
+      --line: rgba(22, 52, 58, 0.14);
+      --accent: #e8923a;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0e2a32; }
+    body { font-family: "Noto Sans SC", sans-serif; color: var(--ink); }
+    canvas { display: block; width: 100%; height: 100%; }
+    #hud, #loader, #toast { position: fixed; inset: 0; pointer-events: none; }
+    #loader {
+      z-index: 20;
+      background: #0e2a32 center/cover no-repeat url("assets/cinematic.jpg");
+      display: grid;
+      place-items: end stretch;
+      pointer-events: auto;
+      transition: opacity 0.9s ease;
+    }
+    #loader::before {
+      content: "";
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(8, 24, 28, 0.15) 30%, rgba(8, 24, 28, 0.82) 100%);
+    }
+    #loader .card {
+      position: relative;
+      padding: 28px 28px 36px;
+      max-width: 560px;
+    }
+    #loader h1 {
+      font-family: Fraunces, serif;
+      font-weight: 700;
+      font-size: clamp(40px, 7vw, 72px);
+      margin: 0 0 8px;
+      color: var(--paper);
+      letter-spacing: 0.02em;
+    }
+    #loader p { margin: 0 0 18px; color: #d8efe8; font-size: 15px; }
+    #bar {
+      height: 3px; width: min(320px, 70vw);
+      background: rgba(255,255,255,0.18);
+      border-radius: 99px; overflow: hidden;
+    }
+    #bar > i {
+      display: block; height: 100%; width: 0%;
+      background: var(--accent);
+      transition: width 0.25s ease;
+    }
+    #hud { z-index: 5; }
+    header.top {
+      position: absolute; top: 20px; left: 22px; right: 22px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      gap: 16px;
+    }
+    .brand {
+      background: var(--foam);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px 16px 10px;
+      pointer-events: auto;
+    }
+    .brand h1 {
+      font-family: Fraunces, serif;
+      font-size: 22px;
+      margin: 0;
+      line-height: 1.1;
+    }
+    .brand small { color: #4c6a70; font-size: 12px; }
+    .controls {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      justify-content: flex-end;
+      pointer-events: auto;
+    }
+    button.chip {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--foam);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 9px 14px;
+      font: 500 13px/1 "Noto Sans SC", sans-serif;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+    }
+    button.chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+    footer.help {
+      position: absolute; left: 22px; bottom: 18px; right: 22px;
+      display: flex; justify-content: space-between; gap: 12px; align-items: end;
+    }
+    .keys {
+      background: var(--foam);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: #3d5a60;
+      pointer-events: auto;
+    }
+    kbd {
+      display: inline-block;
+      min-width: 1.4em;
+      padding: 1px 5px;
+      border-radius: 6px;
+      background: #fff;
+      border: 1px solid var(--line);
+      font: 600 11px/1.4 ui-monospace, monospace;
+      text-align: center;
+    }
+    .meter {
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      color: var(--paper);
+      text-shadow: 0 1px 8px rgba(0,0,0,0.45);
+    }
+    #toast {
+      display: grid; place-items: center;
+      z-index: 8;
+    }
+    #toast b {
+      background: var(--foam);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 16px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: 0.35s ease;
+    }
+    #toast.show b { opacity: 1; transform: none; }
+    @media (max-width: 720px) {
+      footer.help { flex-direction: column; align-items: flex-start; }
+      header.top { flex-direction: column; }
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="loader">
+    <div class="card">
+      <h1>鹈鹕骑行</h1>
+      <p>黎明的码头。一只鹈鹕决定去兜风。</p>
+      <div id="bar"><i id="barFill"></i></div>
+    </div>
+  </div>
+  <div id="hud" hidden>
+    <header class="top">
+      <div class="brand">
+        <h1>鹈鹕骑行</h1>
+        <small>Pelican Ride · 栈桥一圈</small>
+      </div>
+      <div class="controls">
+        <button class="chip" id="btnRide" aria-pressed="true">骑行</button>
+        <button class="chip" id="btnOrbit" aria-pressed="false">环绕</button>
+        <button class="chip" id="btnStatue" aria-pressed="false">雕塑</button>
+        <button class="chip" id="btnNight" aria-pressed="false">夜色</button>
+        <button class="chip" id="btnBell">车铃</button>
+      </div>
+    </header>
+    <footer class="help">
+      <div class="keys">
+        拖动视角 · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 骑行 · <kbd>N</kbd> 日夜 · <kbd>空格</kbd> 车铃
+      </div>
+      <div class="meter" id="meter"></div>
+    </footer>
+  </div>
+  <div id="toast"><b id="toastText">叮铃</b></div>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const canvas = document.querySelector("#c");
+    const UP = new THREE.Vector3(0, 1, 0);
+    const ASSET_FRONT = new THREE.Vector3(0, 0, -1);
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 600);
+    camera.position.set(6.5, 3.4, 8.5);
+
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.minDistance = 3;
+    controls.maxDistance = 42;
+    controls.enabled = false;
+
+    const clock = new THREE.Clock();
+    const loader = new THREE.TextureLoader();
+    const loadTex = (url, colorSpace = true) =>
+      new Promise((resolve, reject) => {
+        loader.load(
+          url,
+          (t) => {
+            if (colorSpace) t.colorSpace = THREE.SRGBColorSpace;
+            t.anisotropy = 8;
+            resolve(t);
+          },
+          undefined,
+          reject
+        );
+      });
+
+    const keys = new Set();
+    const input = { forward: 0, strafe: 0 };
+    let mode = "ride";
+    let night = false;
+    let ready = false;
+    let pathU = 0.12;
+    let manual = false;
+    let speed = 2.4;
+    const DECK_Y = 0.3;
+
+    const onProgress = (p) => {
+      document.getElementById("barFill").style.width = `${Math.round(p * 100)}%`;
+    };
+
+    function toast(msg) {
+      const root = document.getElementById("toast");
+      document.getElementById("toastText").textContent = msg;
+      root.classList.add("show");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => root.classList.remove("show"), 900);
+    }
+
+    const audio = {
+      ctx: null,
+      master: null,
+      ensure() {
+        if (this.ctx) return;
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const master = ctx.createGain();
+        master.gain.value = 0.22;
+        master.connect(ctx.destination);
+        this.ctx = ctx;
+        this.master = master;
+        this.waves();
+      },
+      waves() {
+        const ctx = this.ctx;
+        const bufferSize = 2 * ctx.sampleRate;
+        const noise = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = noise.getChannelData(0);
+        let last = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
+          data[i] = last * 3.4;
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = noise;
+        src.loop = true;
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.value = 420;
+        const g = ctx.createGain();
+        g.gain.value = 0.45;
+        src.connect(filter).connect(g).connect(this.master);
+        src.start();
+      },
+      bell() {
+        this.ensure();
+        const ctx = this.ctx;
+        const now = ctx.currentTime;
+        const freqs = [880, 1320, 1760];
+        freqs.forEach((f, i) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = i ? "triangle" : "sine";
+          o.frequency.value = f;
+          g.gain.setValueAtTime(0.0001, now);
+          g.gain.exponentialRampToValueAtTime(0.28 / (i + 1), now + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, now + 1.1);
+          o.connect(g).connect(this.master);
+          o.start(now);
+          o.stop(now + 1.2);
+        });
+      },
+    };
+
+    function shadow(mesh) {
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    }
+
+    function makeMaterials(tex) {
+      const wood = new THREE.MeshStandardMaterial({
+        map: tex.boardwalk,
+        roughness: 0.82,
+        metalness: 0.02,
+      });
+      tex.boardwalk.wrapS = tex.boardwalk.wrapT = THREE.RepeatWrapping;
+      tex.boardwalk.repeat.set(2.2, 2.2);
+      const water = new THREE.MeshStandardMaterial({
+        map: tex.water,
+        roughness: 0.28,
+        metalness: 0.12,
+        color: 0x3e9a96,
+      });
+      tex.water.wrapS = tex.water.wrapT = THREE.RepeatWrapping;
+      tex.water.repeat.set(3.5, 3.5);
+      water.onBeforeCompile = (shader) => {
+        shader.uniforms.uTime = { value: 0 };
+        shader.vertexShader = `uniform float uTime;\n` + shader.vertexShader;
+        shader.vertexShader = shader.vertexShader.replace(
+          "#include <begin_vertex>",
+          `#include <begin_vertex>
+           transformed.z += sin(position.x * 0.03 + uTime * 0.6) * 0.18;
+           transformed.z += cos(position.y * 0.025 + uTime * 0.45) * 0.12;`
+        );
+        water.userData.shader = shader;
+      };
+      const feather = new THREE.MeshStandardMaterial({
+        map: tex.feathers,
+        roughness: 0.78,
+        metalness: 0.04,
+      });
+      return { wood, water, feather };
+    }
+
+    function tube(points, radius, mat, segs = 24) {
+      const curve = new THREE.CatmullRomCurve3(points);
+      return shadow(new THREE.Mesh(new THREE.TubeGeometry(curve, segs, radius, 8, false), mat));
+    }
+
+    function makeWheel(radius, tireMat, chromeMat) {
+      const g = new THREE.Group();
+      const tire = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.045, 10, 40), tireMat);
+      tire.rotation.y = Math.PI / 2;
+      g.add(shadow(tire));
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.92, 0.012, 8, 40), chromeMat);
+      rim.rotation.y = Math.PI / 2;
+      g.add(shadow(rim));
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.07, 12), chromeMat);
+      hub.rotation.z = Math.PI / 2;
+      g.add(shadow(hub));
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, radius * 1.8, 4), chromeMat);
+        spoke.position.set(0, Math.sin(a) * radius * 0.5, Math.cos(a) * radius * 0.5);
+        spoke.rotation.x = a;
+        g.add(spoke);
+      }
+      return g;
+    }
+
+    function makePelicanBike(mats) {
+      const root = new THREE.Group();
+      root.name = "pelicanBike";
+
+      const paint = new THREE.MeshStandardMaterial({ color: 0x2c4a42, metalness: 0.35, roughness: 0.38 });
+      const tire = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.9, metalness: 0.05 });
+      const chrome = new THREE.MeshStandardMaterial({ color: 0xd9d4cc, metalness: 0.85, roughness: 0.22 });
+      const brown = new THREE.MeshStandardMaterial({ color: 0x5a3a24, roughness: 0.7 });
+      const beakTop = new THREE.MeshStandardMaterial({ color: 0xe8923a, roughness: 0.45, metalness: 0.05 });
+      const pouch = new THREE.MeshStandardMaterial({ color: 0xdeaa4a, roughness: 0.55 });
+      const headMat = new THREE.MeshStandardMaterial({ color: 0xf3efe8, roughness: 0.62 });
+      const nape = new THREE.MeshStandardMaterial({ color: 0x6a3a22, roughness: 0.7 });
+      const legMat = new THREE.MeshStandardMaterial({ color: 0xe07030, roughness: 0.5 });
+      const lemonMat = new THREE.MeshStandardMaterial({ color: 0xe8d44a, roughness: 0.4 });
+      const black = new THREE.MeshStandardMaterial({ color: 0x161616, roughness: 0.3 });
+
+      const R = 0.33;
+      const wheelF = makeWheel(R, tire, chrome);
+      const wheelR = makeWheel(R, tire, chrome);
+      wheelF.position.set(0, R, -0.58);
+      wheelR.position.set(0, R, 0.52);
+      root.add(wheelF, wheelR);
+
+      const bb = new THREE.Vector3(0, 0.30, 0.08);
+      const seat = new THREE.Vector3(0, 0.78, 0.32);
+      const headTube = new THREE.Vector3(0, 0.72, -0.38);
+      const rearHub = new THREE.Vector3(0, R, 0.52);
+      const frontHub = new THREE.Vector3(0, R, -0.58);
+
+      root.add(tube([bb.clone(), seat.clone()], 0.022, paint, 12));
+      root.add(tube([seat.clone(), rearHub.clone()], 0.018, paint, 12));
+      root.add(tube([bb.clone(), rearHub.clone()], 0.018, paint, 12));
+      root.add(tube([bb.clone(), headTube.clone()], 0.022, paint, 12));
+      root.add(tube([seat.clone(), headTube.clone()], 0.016, paint, 10));
+      root.add(tube([headTube.clone(), frontHub.clone()], 0.016, paint, 12));
+
+      const bar = tube(
+        [new THREE.Vector3(-0.28, 0.86, -0.42), new THREE.Vector3(0, 0.90, -0.38), new THREE.Vector3(0.28, 0.86, -0.42)],
+        0.014,
+        paint,
+        10
+      );
+      root.add(bar);
+      const gripL = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.1, 8), brown));
+      gripL.rotation.z = Math.PI / 2;
+      gripL.position.set(-0.30, 0.86, -0.42);
+      const gripR = gripL.clone();
+      gripR.position.x = 0.30;
+      root.add(gripL, gripR);
+
+      const saddle = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.28), brown));
+      saddle.position.copy(seat);
+      saddle.position.y += 0.03;
+      root.add(saddle);
+
+      const crank = new THREE.Group();
+      crank.position.copy(bb);
+      const arm = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.32), paint));
+      crank.add(arm);
+      const pedalL = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.025, 0.06), black));
+      pedalL.position.set(-0.10, 0, 0.16);
+      const pedalR = pedalL.clone();
+      pedalR.position.set(0.10, 0, -0.16);
+      crank.add(pedalL, pedalR);
+      const ring = shadow(new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.012, 8, 18), chrome));
+      ring.rotation.y = Math.PI / 2;
+      crank.add(ring);
+      root.add(crank);
+
+      const basket = new THREE.Group();
+      basket.position.set(0, 0.62, -0.72);
+      const wire = new THREE.MeshStandardMaterial({ color: 0x6a7370, metalness: 0.7, roughness: 0.35 });
+      basket.add(shadow(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.16, 0.22), new THREE.MeshStandardMaterial({
+        color: 0x6a7370, metalness: 0.6, roughness: 0.4, wireframe: true
+      }))));
+      const lemon = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 12), lemonMat));
+      lemon.position.set(0.02, -0.02, 0.01);
+      lemon.name = "lemon";
+      basket.add(lemon);
+      root.add(basket);
+
+      const lamp = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 10), chrome));
+      lamp.position.set(0, 0.70, -0.55);
+      root.add(lamp);
+      const bellMesh = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.025, 10, 8), chrome));
+      bellMesh.position.set(0.08, 0.93, -0.36);
+      root.add(bellMesh);
+
+      const bird = new THREE.Group();
+      bird.position.set(0, 0.92, 0.22);
+      const body = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.42, 28, 20), mats.feather));
+      body.scale.set(0.78, 0.92, 1.12);
+      bird.add(body);
+      const tail = shadow(new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.38, 10), mats.feather));
+      tail.rotation.x = Math.PI / 2.4;
+      tail.position.set(0, -0.05, 0.52);
+      bird.add(tail);
+
+      const wingL = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.38, 18, 12, 0, Math.PI), mats.feather));
+      wingL.scale.set(0.28, 0.72, 1.05);
+      wingL.position.set(-0.34, 0.02, 0.06);
+      wingL.rotation.y = 0.15;
+      const wingR = wingL.clone();
+      wingR.position.x = 0.34;
+      wingR.rotation.y = -0.15;
+      bird.add(wingL, wingR);
+
+      const neck = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.34, 12), nape));
+      neck.position.set(0, 0.38, -0.18);
+      neck.rotation.x = -0.55;
+      bird.add(neck);
+      const head = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), headMat));
+      head.position.set(0, 0.62, -0.38);
+      bird.add(head);
+      const cap = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.45), nape));
+      cap.position.set(0, 0.68, -0.32);
+      cap.rotation.x = 0.4;
+      bird.add(cap);
+
+      const upperBeak = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.07, 0.62, 10), beakTop));
+      upperBeak.rotation.x = Math.PI / 2;
+      upperBeak.position.set(0, 0.60, -0.78);
+      bird.add(upperBeak);
+      const pouchMesh = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), pouch));
+      pouchMesh.scale.set(0.7, 0.55, 1.8);
+      pouchMesh.position.set(0, 0.48, -0.72);
+      bird.add(pouchMesh);
+      const tip = shadow(new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), beakTop));
+      tip.position.set(0, 0.58, -1.08);
+      bird.add(tip);
+
+      const eyeGeo = new THREE.SphereGeometry(0.035, 10, 8);
+      const eyeL = shadow(new THREE.Mesh(eyeGeo, black));
+      eyeL.position.set(-0.14, 0.68, -0.50);
+      const eyeR = eyeL.clone();
+      eyeR.position.x = 0.14;
+      bird.add(eyeL, eyeR);
+      const highlight = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      highlight.position.set(-0.13, 0.70, -0.53);
+      const highlightR = highlight.clone();
+      highlightR.position.x = 0.13;
+      bird.add(highlight, highlightR);
+
+      const hipL = new THREE.Group();
+      hipL.position.set(-0.12, -0.12, 0.02);
+      const thighL = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.34, 8), legMat));
+      thighL.position.y = -0.17;
+      hipL.add(thighL);
+      const footL = shadow(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.025, 0.22), legMat));
+      footL.position.set(-0.02, -0.36, 0.04);
+      hipL.add(footL);
+      const hipR = hipL.clone();
+      hipR.position.x = 0.12;
+      bird.add(hipL, hipR);
+
+      root.add(bird);
+
+      const blob = new THREE.Mesh(
+        new THREE.CircleGeometry(0.7, 20),
+        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22, depthWrite: false })
+      );
+      blob.rotation.x = -Math.PI / 2;
+      blob.position.y = 0.02;
+      root.add(blob);
+
+      root.userData = { wheelF, wheelR, crank, lemon, wingL, wingR, hipL, hipR, bird, blob };
+      return root;
+    }
+
+    function makeWorld(mats, tex) {
+      const world = new THREE.Group();
+
+      const sea = new THREE.Mesh(new THREE.PlaneGeometry(220, 220, 80, 80), mats.water);
+      sea.rotation.x = -Math.PI / 2;
+      sea.position.y = -0.05;
+      sea.receiveShadow = true;
+      world.add(sea);
+
+      const pier = new THREE.Mesh(new THREE.CylinderGeometry(16.2, 16.2, 0.3, 80), mats.wood);
+      pier.position.y = 0.15;
+      pier.receiveShadow = true;
+      pier.castShadow = true;
+      world.add(pier);
+
+      const lagoon = new THREE.Mesh(new THREE.CircleGeometry(11.3, 48), mats.water);
+      lagoon.rotation.x = -Math.PI / 2;
+      lagoon.position.y = 0.31;
+      world.add(lagoon);
+
+      const railMat = new THREE.MeshStandardMaterial({ color: 0x6b5a48, roughness: 0.7 });
+      for (let i = 0; i < 36; i++) {
+        const a = (i / 36) * Math.PI * 2;
+        const post = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 1.05, 8), railMat));
+        post.position.set(Math.cos(a) * 16.05, 0.62, Math.sin(a) * 16.05);
+        world.add(post);
+      }
+
+      const plinth = shadow(new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.3, 0.55, 24), new THREE.MeshStandardMaterial({
+        color: 0xc9c0b0, roughness: 0.6
+      })));
+      plinth.position.set(0, 0.35, 0);
+      world.add(plinth);
+
+      const sky = new THREE.Mesh(
+        new THREE.SphereGeometry(240, 48, 24),
+        new THREE.MeshBasicMaterial({ map: tex.sky, side: THREE.BackSide, fog: false, depthWrite: false })
+      );
+      sky.name = "sky";
+      world.add(sky);
+
+      for (let i = 0; i < 10; i++) {
+        const pile = shadow(new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 2.4, 8), railMat));
+        const a = (i / 10) * Math.PI * 2 + 0.2;
+        pile.position.set(Math.cos(a) * 19.5, -0.4, Math.sin(a) * 19.5);
+        pile.rotation.z = (Math.random() - 0.5) * 0.08;
+        world.add(pile);
+      }
+
+      world.userData = { sea, sky };
+      return world;
+    }
+
+    function makeLights() {
+      const hemi = new THREE.HemisphereLight(0xffe2c4, 0x3a6a6a, 1.05);
+      scene.add(hemi);
+      const sun = new THREE.DirectionalLight(0xfff0d8, 1.55);
+      sun.position.set(18, 28, 10);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      sun.shadow.camera.near = 2;
+      sun.shadow.camera.far = 80;
+      sun.shadow.camera.left = -24;
+      sun.shadow.camera.right = 24;
+      sun.shadow.camera.top = 24;
+      sun.shadow.camera.bottom = -24;
+      scene.add(sun);
+      const fill = new THREE.DirectionalLight(0x9ecfff, 0.25);
+      fill.position.set(-12, 8, -10);
+      scene.add(fill);
+      const moon = new THREE.PointLight(0xf0c060, 0, 40, 2);
+      moon.position.set(12, 16, -8);
+      scene.add(moon);
+      const spot = new THREE.SpotLight(0xfff1d6, 1.4, 18, 0.55, 0.4, 1);
+      spot.position.set(2.5, 6.5, 4.5);
+      spot.target.position.set(0, 1.1, 0);
+      scene.add(spot, spot.target);
+      return { hemi, sun, fill, moon, spot };
+    }
+
+    const path = new THREE.CatmullRomCurve3(
+      Array.from({ length: 48 }, (_, i) => {
+        const a = (i / 48) * Math.PI * 2;
+        return new THREE.Vector3(Math.cos(a) * 13.9, 0, Math.sin(a) * 13.9);
+      }),
+      true
+    );
+
+    function yawFromTangent(t) {
+      return Math.atan2(-t.x, -t.z);
+    }
+
+    function setNight(on, lights, world, tex) {
+      night = on;
+      document.getElementById("btnNight").setAttribute("aria-pressed", on ? "true" : "false");
+      const sky = world.getObjectByName("sky");
+      if (sky) sky.material.map = on ? tex.night : tex.sky;
+      sky.material.needsUpdate = true;
+      scene.fog.color.set(on ? 0x0c1b28 : 0x9ec9c8);
+      scene.background = new THREE.Color(on ? 0x0c1b28 : 0xb7d4d8);
+      lights.hemi.intensity = on ? 0.28 : 1.05;
+      lights.sun.intensity = on ? 0.12 : 1.55;
+      lights.fill.intensity = on ? 0.08 : 0.25;
+      lights.moon.intensity = on ? 1.6 : 0;
+      renderer.toneMappingExposure = on ? 0.82 : 1.05;
+    }
+
+    function setMode(next) {
+      mode = next;
+      ["ride", "orbit", "statue"].forEach((m) => {
+        const el = document.getElementById("btn" + m[0].toUpperCase() + m.slice(1));
+        if (el) el.setAttribute("aria-pressed", m === next ? "true" : "false");
+      });
+      controls.enabled = next !== "ride";
+      if (next === "ride") manual = false;
+    }
+
+    function cameraBasis() {
+      const f = new THREE.Vector3();
+      camera.getWorldDirection(f);
+      f.y = 0;
+      f.normalize();
+      const r = new THREE.Vector3().crossVectors(f, UP);
+      return { f, r };
+    }
+
+    function placeOnPath(rider, u, extraYaw = 0) {
+      const pos = path.getPointAt(u);
+      const tan = path.getTangentAt(u);
+      rider.position.set(pos.x, DECK_Y, pos.z);
+      rider.rotation.y = yawFromTangent(tan) + extraYaw;
+    }
+
+    function followCamera(rider) {
+      const facing = ASSET_FRONT.clone().applyQuaternion(rider.quaternion);
+      const right = new THREE.Vector3().crossVectors(facing, UP).normalize();
+      const target = rider.position.clone().addScaledVector(UP, 1.05).addScaledVector(facing, 0.4);
+      const desired = rider.position.clone()
+        .addScaledVector(facing, -6.4)
+        .addScaledVector(right, 1.15)
+        .addScaledVector(UP, 3.1);
+      camera.position.lerp(desired, 0.09);
+      camera.lookAt(target);
+      controls.target.copy(target);
+    }
+
+    function statueCamera(relief) {
+      const target = relief.position.clone().addScaledVector(UP, 1.1);
+      controls.target.lerp(target, 0.08);
+      if (!controls.enabled) camera.lookAt(target);
+    }
+
+    window.addEventListener("keydown", (e) => {
+      keys.add(e.code);
+      if (e.code === "Space") {
+        e.preventDefault();
+        audio.bell();
+        toast("叮铃 — 柠檬晃了一下");
+      }
+      if (e.code === "KeyN") document.getElementById("btnNight").click();
+      if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
+        manual = true;
+        setMode("ride");
+      }
+    });
+    window.addEventListener("keyup", (e) => keys.delete(e.code));
+    canvas.addEventListener("pointerdown", () => audio.ensure());
+
+    window.addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    async function main() {
+      onProgress(0.08);
+      const tex = {
+        sky: await loadTex("assets/sky.jpg"),
+        night: await loadTex("assets/night.jpg"),
+        boardwalk: await loadTex("assets/boardwalk.jpg"),
+        water: await loadTex("assets/water.jpg"),
+        feathers: await loadTex("assets/feathers.jpg"),
+        pelican: await loadTex("assets/pelican-alpha.png"),
+      };
+      tex.feathers.wrapS = tex.feathers.wrapT = THREE.RepeatWrapping;
+      tex.feathers.repeat.set(2, 2);
+      onProgress(0.4);
+
+      scene.background = new THREE.Color(0xb7d4d8);
+      scene.fog = new THREE.FogExp2(0x9ec9c8, 0.008);
+
+      const mats = makeMaterials(tex);
+      const world = makeWorld(mats, tex);
+      scene.add(world);
+      const lights = makeLights();
+      const rider = makePelicanBike(mats);
+      rider.scale.setScalar(1.12);
+      scene.add(rider);
+      placeOnPath(rider, pathU);
+      onProgress(0.62);
+
+      const relief = new THREE.Group();
+      relief.position.set(0, 1.55, 0);
+      scene.add(relief);
+      {
+        const geo = new THREE.PlaneGeometry(2.55, 2.55, 160, 160);
+        const img = tex.pelican.image;
+        const cnv = document.createElement("canvas");
+        cnv.width = img.width;
+        cnv.height = img.height;
+        const ctx2 = cnv.getContext("2d");
+        ctx2.drawImage(img, 0, 0);
+        const pix = ctx2.getImageData(0, 0, cnv.width, cnv.height).data;
+        const posAttr = geo.attributes.position;
+        const uvAttr = geo.attributes.uv;
+        for (let i = 0; i < posAttr.count; i++) {
+          const u = uvAttr.getX(i);
+          const v = uvAttr.getY(i);
+          const px = Math.min(cnv.width - 1, Math.max(0, (u * cnv.width) | 0));
+          const py = Math.min(cnv.height - 1, Math.max(0, ((1 - v) * cnv.height) | 0));
+          const a = pix[(py * cnv.width + px) * 4 + 3] / 255;
+          posAttr.setZ(i, a * a * 0.18);
+        }
+        geo.computeVertexNormals();
+        const mat = new THREE.MeshStandardMaterial({
+          map: tex.pelican,
+          transparent: true,
+          alphaTest: 0.22,
+          side: THREE.DoubleSide,
+          roughness: 0.62,
+          metalness: 0.04,
+        });
+        const statue = shadow(new THREE.Mesh(geo, mat));
+        relief.add(statue);
+        relief.userData.model = statue;
+      }
+      onProgress(0.9);
+
+      document.getElementById("btnRide").onclick = () => setMode("ride");
+      document.getElementById("btnOrbit").onclick = () => setMode("orbit");
+      document.getElementById("btnStatue").onclick = () => {
+        setMode("statue");
+        camera.position.set(3.6, 1.9, 4.4);
+        controls.target.set(0, 1.55, 0);
+      };
+      document.getElementById("btnNight").onclick = () => setNight(!night, lights, world, tex);
+      document.getElementById("btnBell").onclick = () => {
+        audio.bell();
+        toast("叮铃 — 柠檬晃了一下");
+      };
+
+      setMode("ride");
+      ready = true;
+      window.__debugPos = () => ({
+        x: +rider.position.x.toFixed(2),
+        y: +rider.position.y.toFixed(2),
+        z: +rider.position.z.toFixed(2),
+        r: +Math.hypot(rider.position.x, rider.position.z).toFixed(2),
+      });
+      onProgress(1);
+      document.getElementById("hud").hidden = false;
+      const loaderEl = document.getElementById("loader");
+      loaderEl.style.opacity = "0";
+      setTimeout(() => { loaderEl.style.display = "none"; }, 900);
+
+      const ud = rider.userData;
+      const meter = document.getElementById("meter");
+
+      window.__selfTestControls = async function selfTestControls() {
+        const press = async (code, ms) => {
+          window.dispatchEvent(new KeyboardEvent("keydown", { code }));
+          await new Promise((r) => setTimeout(r, ms));
+          window.dispatchEvent(new KeyboardEvent("keyup", { code }));
+        };
+        const facing = () => ASSET_FRONT.clone().applyQuaternion(rider.quaternion);
+        manual = true;
+        setMode("ride");
+        for (const [code, axis, sign] of [["KeyD", "r", +1], ["KeyA", "r", -1], ["KeyW", "f", +1], ["KeyS", "f", -1]]) {
+          const b = cameraBasis();
+          const p0 = rider.position.clone();
+          await press(code, 400);
+          const d = rider.position.clone().sub(p0); d.y = 0;
+          if (d.length() < 0.02) continue;
+          const along = d.clone().normalize().dot(b[axis]) * sign;
+          console.assert(along > 0.2, `${code}: moved poorly cos=${along.toFixed(2)}`);
+          console.assert(facing().dot(d.clone().normalize()) > -0.2, `${code}: facing off travel`);
+        }
+        return "ok";
+      };
+
+      function tick() {
+        const dt = Math.min(clock.getDelta(), 0.05);
+        const t = clock.elapsedTime;
+        if (mats.water.userData.shader) mats.water.userData.shader.uniforms.uTime.value = t;
+        if (world.userData.sea.material.map) {
+          world.userData.sea.material.map.offset.x = t * 0.012;
+          world.userData.sea.material.map.offset.y = t * 0.007;
+        }
+        if (relief.userData.model) relief.rotation.y = t * 0.15;
+
+        input.forward = (keys.has("KeyW") || keys.has("ArrowUp") ? 1 : 0) + (keys.has("KeyS") || keys.has("ArrowDown") ? -1 : 0);
+        input.strafe = (keys.has("KeyD") || keys.has("ArrowRight") ? 1 : 0) + (keys.has("KeyA") || keys.has("ArrowLeft") ? -1 : 0);
+
+        let pedalSpeed = speed;
+        if (mode === "ride") {
+          if (manual && (input.forward || input.strafe)) {
+            const { f, r } = cameraBasis();
+            const move = new THREE.Vector3();
+            move.addScaledVector(f, input.forward);
+            move.addScaledVector(r, input.strafe);
+            if (move.lengthSq() > 0) {
+              move.normalize();
+              rider.position.addScaledVector(move, dt * 4.6);
+              rider.rotation.y = Math.atan2(-move.x, -move.z);
+              const radial = new THREE.Vector3(rider.position.x, 0, rider.position.z);
+              const len = radial.length();
+              if (len > 15.4) rider.position.multiplyScalar(15.4 / len);
+              if (len < 12.2) rider.position.multiplyScalar(12.2 / len);
+              rider.position.y = DECK_Y;
+              pedalSpeed = 5.2;
+            }
+          } else {
+            pathU = (pathU + dt * 0.035) % 1;
+            placeOnPath(rider, pathU);
+            pedalSpeed = speed;
+          }
+          followCamera(rider);
+        } else if (mode === "orbit") {
+          pathU = (pathU + dt * 0.035) % 1;
+          placeOnPath(rider, pathU);
+          controls.update();
+        } else {
+          statueCamera(relief);
+          controls.update();
+        }
+
+        const spin = pedalSpeed * dt;
+        ud.wheelF.rotation.x -= spin * 2.8;
+        ud.wheelR.rotation.x -= spin * 2.8;
+        ud.crank.rotation.x -= spin * 2.8;
+        ud.lemon.rotation.y = Math.sin(t * 3.2) * 0.4;
+        ud.lemon.position.y = -0.02 + Math.sin(t * 6) * 0.012;
+        ud.wingL.rotation.z = Math.sin(t * 2.1) * 0.04;
+        ud.wingR.rotation.z = -Math.sin(t * 2.1) * 0.04;
+        ud.bird.position.y = 0.92 + Math.sin(t * 8) * 0.012;
+        ud.hipL.rotation.x = Math.sin(t * pedalSpeed * 1.4) * 0.45;
+        ud.hipR.rotation.x = Math.cos(t * pedalSpeed * 1.4) * 0.45;
+
+        const kmh = Math.abs(pedalSpeed) * 3.1;
+        meter.textContent = night ? `夜航  ${kmh.toFixed(0)} km/h` : `晨骑  ${kmh.toFixed(0)} km/h`;
+        renderer.render(scene, camera);
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+
+    main().catch((err) => {
+      document.querySelector("#loader p").textContent = "加载失败：" + err.message;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>
